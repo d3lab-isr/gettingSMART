@@ -1,0 +1,1 @@
+{"name":"Getting SMART Workshop","id":"getting-smart-workshop","created":"2/11/2020 6:03:43 PM +00:00","modified":"2/11/2020 6:03:43 PM +00:00","lastBackedUp":"","accessed":"3/17/2020 3:23:43 PM +00:00","clonedFrom":null,"cloneCount":2,"gitRepositoryUrl":null,"public":"True","starCount":0,"setupSteps":[{"operation":"Shell Script","targetPath":"init.sh","options":{}}]}

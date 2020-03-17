@@ -1,0 +1,554 @@
+{
+  "cells": [
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "# Module 3: Using Data from a SMART to Address Primary Aims (Part I) \n# R Code Tutorial <br/>\n\n**Authors:** Nicholas J. Seewald, Daniel Almirall, Inbal Nahum-Shani, Audrey Boruvka, and Susan A. Murphy\n\n**Date:** March 20, 2020\n\nThis file provides example R code to analyze *simulated* data that was generated to mimic data arising from the ADHD SMART study (PI: William Pelham). An accompanying handout (\"ADHD Handout.pdf\") describes the variables in the data.\n\nTranslation of SAS code from Modules 3 and 4 into R is by Audrey Boruvka and Nicholas J. Seewald [(email)](mailto:nseewald@umich.edu). Notebooks created by [Nicholas J. Seewald](https://nickseewald.com).\n\n### Contents\n- [Import and Summarize Data](#data)\n- [Part (a): Investigating the main effect of first-stage intervention options](#part-a)\n- [Part (b): Main effect of second-stage options / tactics](#part-b)\n- [Part (c): Estimating the mean outcome under an embedded adaptive intervention](#part-c)\n- [Part (d): Sample Size for Primary Aims involving Main Effect Comparisons](#part-d)\n<hr>"
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "## <a name=\"setup\"></a> Setup\nWe'll start by loading some packages, which have already been installed into the notebook environment."
+    },
+    {
+      "metadata": {
+        "trusted": true,
+        "editable": false,
+        "deletable": false,
+        "run_control": {
+          "frozen": true
+        }
+      },
+      "cell_type": "code",
+      "source": "if (!length(find.package(\"geepack\", quiet = TRUE))) \n    install.packages(\"geepack\", dependencies = TRUE)",
+      "execution_count": 33,
+      "outputs": []
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "The file `functions.R` in this project contains code for a function called `estimate()` that will help us produce cleaner output from some of the models we'll fit in this module. Advanced R users are encouraged to look at this file to see how these functions work; otherwise, just know that this code will help us mimic SAS's estimate statements which are used in the training slides."
+    },
+    {
+      "metadata": {
+        "trusted": true,
+        "editable": false,
+        "deletable": false
+      },
+      "cell_type": "code",
+      "source": "source('functions.R')",
+      "execution_count": 9,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": "function 'estimate' loaded successfully.\n",
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "## <a name=\"data\"></a> Import and Summarize Data"
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "Let's read in the dataset `adhd-simulated-dataset.csv`. This is a .csv file, so we'll import it into R using the `read.csv` function. We'll call the dataset `adhd`. This will be the name we use for the dataset throughout the remainder of the code. *Remember that this is **simulated** data and does not necessarily reflect actual findings of the ADHD SMART study.*\n\nWe will also rename all of the variables to be lowercase, since R is case-sensitive. Lowercase variable names are easier to type and remember!"
+    },
+    {
+      "metadata": {
+        "trusted": true
+      },
+      "cell_type": "code",
+      "source": "adhd <- read.csv(\"adhd-simulated-dataset.csv\")\n\n# R is case-sensitive! Avoid issues by changing variable names to all lowercase\nnames(adhd) <- tolower(names(adhd))\n\n# Sort data by ID\nadhd <- adhd[order(adhd$id), ]",
+      "execution_count": 10,
+      "outputs": []
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "Now that we've read in the data, we can view the first handful of rows using the `head` function."
+    },
+    {
+      "metadata": {
+        "trusted": true
+      },
+      "cell_type": "code",
+      "source": "head(adhd)",
+      "execution_count": 11,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": "  id o11 o12        o13 o14 a1 r o21 o22 a2 y rerand\n1 1  0    1.1388268 0   1   -1 0  2  1   -1 3 1     \n2 2  0    0.1974932 0   1   -1 0  6  1   -1 3 1     \n3 3  1    0.3507961 0   0   -1 0  2  0    1 1 1     \n4 4  1   -0.4076125 0   1   -1 0  6  1    1 4 1     \n5 5  0   -0.7040368 1   0   -1 1 NA  0   NA 4 0     \n6 6  1   -1.3398180 0   1   -1 0  1  0   -1 5 1     ",
+            "text/latex": "A data.frame: 6 x 12\n\\begin{tabular}{r|llllllllllll}\n id & o11 & o12 & o13 & o14 & a1 & r & o21 & o22 & a2 & y & rerand\\\\\n <int> & <int> & <dbl> & <int> & <int> & <int> & <int> & <int> & <int> & <int> & <int> & <int>\\\\\n\\hline\n\t 1 & 0 &  1.1388268 & 0 & 1 & -1 & 0 &  2 & 1 & -1 & 3 & 1\\\\\n\t 2 & 0 &  0.1974932 & 0 & 1 & -1 & 0 &  6 & 1 & -1 & 3 & 1\\\\\n\t 3 & 1 &  0.3507961 & 0 & 0 & -1 & 0 &  2 & 0 &  1 & 1 & 1\\\\\n\t 4 & 1 & -0.4076125 & 0 & 1 & -1 & 0 &  6 & 1 &  1 & 4 & 1\\\\\n\t 5 & 0 & -0.7040368 & 1 & 0 & -1 & 1 & NA & 0 & NA & 4 & 0\\\\\n\t 6 & 1 & -1.3398180 & 0 & 1 & -1 & 0 &  1 & 0 & -1 & 5 & 1\\\\\n\\end{tabular}\n",
+            "text/markdown": "\nA data.frame: 6 x 12\n\n| id &lt;int&gt; | o11 &lt;int&gt; | o12 &lt;dbl&gt; | o13 &lt;int&gt; | o14 &lt;int&gt; | a1 &lt;int&gt; | r &lt;int&gt; | o21 &lt;int&gt; | o22 &lt;int&gt; | a2 &lt;int&gt; | y &lt;int&gt; | rerand &lt;int&gt; |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n| 1 | 0 |  1.1388268 | 0 | 1 | -1 | 0 |  2 | 1 | -1 | 3 | 1 |\n| 2 | 0 |  0.1974932 | 0 | 1 | -1 | 0 |  6 | 1 | -1 | 3 | 1 |\n| 3 | 1 |  0.3507961 | 0 | 0 | -1 | 0 |  2 | 0 |  1 | 1 | 1 |\n| 4 | 1 | -0.4076125 | 0 | 1 | -1 | 0 |  6 | 1 |  1 | 4 | 1 |\n| 5 | 0 | -0.7040368 | 1 | 0 | -1 | 1 | NA | 0 | NA | 4 | 0 |\n| 6 | 1 | -1.3398180 | 0 | 1 | -1 | 0 |  1 | 0 | -1 | 5 | 1 |\n\n",
+            "text/html": "<table>\n<caption>A data.frame: 6 x 12</caption>\n<thead>\n\t<tr><th scope=col>id</th><th scope=col>o11</th><th scope=col>o12</th><th scope=col>o13</th><th scope=col>o14</th><th scope=col>a1</th><th scope=col>r</th><th scope=col>o21</th><th scope=col>o22</th><th scope=col>a2</th><th scope=col>y</th><th scope=col>rerand</th></tr>\n\t<tr><th scope=col>&lt;int&gt;</th><th scope=col>&lt;int&gt;</th><th scope=col>&lt;dbl&gt;</th><th scope=col>&lt;int&gt;</th><th scope=col>&lt;int&gt;</th><th scope=col>&lt;int&gt;</th><th scope=col>&lt;int&gt;</th><th scope=col>&lt;int&gt;</th><th scope=col>&lt;int&gt;</th><th scope=col>&lt;int&gt;</th><th scope=col>&lt;int&gt;</th><th scope=col>&lt;int&gt;</th></tr>\n</thead>\n<tbody>\n\t<tr><td>1</td><td>0</td><td> 1.1388268</td><td>0</td><td>1</td><td>-1</td><td>0</td><td> 2</td><td>1</td><td>-1</td><td>3</td><td>1</td></tr>\n\t<tr><td>2</td><td>0</td><td> 0.1974932</td><td>0</td><td>1</td><td>-1</td><td>0</td><td> 6</td><td>1</td><td>-1</td><td>3</td><td>1</td></tr>\n\t<tr><td>3</td><td>1</td><td> 0.3507961</td><td>0</td><td>0</td><td>-1</td><td>0</td><td> 2</td><td>0</td><td> 1</td><td>1</td><td>1</td></tr>\n\t<tr><td>4</td><td>1</td><td>-0.4076125</td><td>0</td><td>1</td><td>-1</td><td>0</td><td> 6</td><td>1</td><td> 1</td><td>4</td><td>1</td></tr>\n\t<tr><td>5</td><td>0</td><td>-0.7040368</td><td>1</td><td>0</td><td>-1</td><td>1</td><td>NA</td><td>0</td><td>NA</td><td>4</td><td>0</td></tr>\n\t<tr><td>6</td><td>1</td><td>-1.3398180</td><td>0</td><td>1</td><td>-1</td><td>0</td><td> 1</td><td>0</td><td>-1</td><td>5</td><td>1</td></tr>\n</tbody>\n</table>\n"
+          },
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "We can see that `adhd` contains a number of variables. We summarize them below. A more detailed summary is available in [this handout](https://gettingsmartworkshop-nseewald.notebooks.azure.com/j/files/ADHD_Data_Description_Handout.pdf).\n\n| Variable Name | Variable Type | Description \n| -- | -- | :---\n| `id` | Integer | Student ID number \n| `o11` | Baseline covariate; binary (0/1) | Oppositional defiant disorder diagnosis (1 = yes, 0 = no) \n| `o12` | Baseline covariate; continuous | ADHD severity at end of previous school year (0 - 3; higher values are fewer symptoms) \n| `o13` | Baseline covariate; binary (0/1) | Medication prior to first-stage intervention (1 = yes; 0 = no) \n| `o14` | Baseline covariate; binary (0/1) | Race (1 = white; 0 = non-white) \n| `a1` | First-stage intervention indicator (-1/1) | -1 = MED; -1 = BMOD \n| `r` | Response indicator (0/1) | 0 = Participant did not respond to first-stage intervention;  1 = participant responded\n| `o21` | Intermediate outcome; continuous | Number of months until non-response (max of 8 months) \n| `o22` | Intermediate outcome; binary (0/1) | Adherence to first-stage intervention (1 = high adherence; 0 = otherwise)\n| `a2` | Second-stage intervention indicator (-1/1) | -1 = AUGMENT; 1 = INTENSIFY\n| `y` | Outcome (continuous) | Participant's school performance at end of school year (1-5; higher is better)"
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "Whenever we start working with a dataset, it's helpful to summarize the variables to get a sense of what we're working with."
+    },
+    {
+      "metadata": {
+        "trusted": true,
+        "scrolled": true
+      },
+      "cell_type": "code",
+      "source": "## Brief summary statistics\nsummary(adhd)",
+      "execution_count": 13,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": "       id              o11              o12                o13        \n Min.   :  1.00   Min.   :0.0000   Min.   :-2.85949   Min.   :0.0000  \n 1st Qu.: 38.25   1st Qu.:0.0000   1st Qu.:-0.85900   1st Qu.:0.0000  \n Median : 75.50   Median :0.0000   Median :-0.04929   Median :0.0000  \n Mean   : 75.50   Mean   :0.3533   Mean   :-0.12059   Mean   :0.3133  \n 3rd Qu.:112.75   3rd Qu.:1.0000   3rd Qu.: 0.55809   3rd Qu.:1.0000  \n Max.   :150.00   Max.   :1.0000   Max.   : 2.43969   Max.   :1.0000  \n                                                                      \n      o14               a1           r             o21             o22        \n Min.   :0.0000   Min.   :-1   Min.   :0.00   Min.   :1.000   Min.   :0.0000  \n 1st Qu.:1.0000   1st Qu.:-1   1st Qu.:0.00   1st Qu.:3.000   1st Qu.:0.0000  \n Median :1.0000   Median : 0   Median :0.00   Median :5.000   Median :0.0000  \n Mean   :0.8067   Mean   : 0   Mean   :0.34   Mean   :4.586   Mean   :0.4533  \n 3rd Qu.:1.0000   3rd Qu.: 1   3rd Qu.:1.00   3rd Qu.:6.000   3rd Qu.:1.0000  \n Max.   :1.0000   Max.   : 1   Max.   :1.00   Max.   :8.000   Max.   :1.0000  \n                                              NA's   :51                      \n       a2                y             rerand    \n Min.   :-1.0000   Min.   :1.000   Min.   :0.00  \n 1st Qu.:-1.0000   1st Qu.:2.000   1st Qu.:0.00  \n Median : 1.0000   Median :3.000   Median :1.00  \n Mean   : 0.0101   Mean   :2.953   Mean   :0.66  \n 3rd Qu.: 1.0000   3rd Qu.:4.000   3rd Qu.:1.00  \n Max.   : 1.0000   Max.   :5.000   Max.   :1.00  \n NA's   :51                                      "
+          },
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "We can also get the standard deviation for each of the variables. We do this by using `apply()`, which applies a function to the rows (1) or columns (2) of a `data.frame`. Here, we `apply` `sd` to the columns of `adhd`:"
+    },
+    {
+      "metadata": {
+        "trusted": true
+      },
+      "cell_type": "code",
+      "source": "round(apply(adhd, 2, sd, na.rm = T), 3)",
+      "execution_count": 14,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": "    id    o11    o12    o13    o14     a1      r    o21    o22     a2      y \n43.445  0.480  1.014  0.465  0.396  1.003  0.475  2.015  0.499  1.005  1.281 \nrerand \n 0.475 ",
+            "text/latex": "\\begin{description*}\n\\item[id] 43.445\n\\item[o11] 0.48\n\\item[o12] 1.014\n\\item[o13] 0.465\n\\item[o14] 0.396\n\\item[a1] 1.003\n\\item[r] 0.475\n\\item[o21] 2.015\n\\item[o22] 0.499\n\\item[a2] 1.005\n\\item[y] 1.281\n\\item[rerand] 0.475\n\\end{description*}\n",
+            "text/markdown": "id\n:   43.445o11\n:   0.48o12\n:   1.014o13\n:   0.465o14\n:   0.396a1\n:   1.003r\n:   0.475o21\n:   2.015o22\n:   0.499a2\n:   1.005y\n:   1.281rerand\n:   0.475\n\n",
+            "text/html": "<dl class=dl-horizontal>\n\t<dt>id</dt>\n\t\t<dd>43.445</dd>\n\t<dt>o11</dt>\n\t\t<dd>0.48</dd>\n\t<dt>o12</dt>\n\t\t<dd>1.014</dd>\n\t<dt>o13</dt>\n\t\t<dd>0.465</dd>\n\t<dt>o14</dt>\n\t\t<dd>0.396</dd>\n\t<dt>a1</dt>\n\t\t<dd>1.003</dd>\n\t<dt>r</dt>\n\t\t<dd>0.475</dd>\n\t<dt>o21</dt>\n\t\t<dd>2.015</dd>\n\t<dt>o22</dt>\n\t\t<dd>0.499</dd>\n\t<dt>a2</dt>\n\t\t<dd>1.005</dd>\n\t<dt>y</dt>\n\t\t<dd>1.281</dd>\n\t<dt>rerand</dt>\n\t\t<dd>0.475</dd>\n</dl>\n"
+          },
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "trusted": true
+      },
+      "cell_type": "code",
+      "source": "## Frequency table of the initial treatment, early response by week 8, and second\n## stage treatments\ntable(adhd$a1)\ntable(adhd$r)\nwith(adhd, table(a2, r, useNA = \"ifany\"))  # cross-tabulate a2 and",
+      "execution_count": 15,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": "\n-1  1 \n75 75 "
+          },
+          "metadata": {}
+        },
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": "\n 0  1 \n99 51 "
+          },
+          "metadata": {}
+        },
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": "      r\na2      0  1\n  -1   49  0\n  1    50  0\n  <NA>  0 51"
+          },
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "Let's create some frequency tables to see how our randomization went (how many children were assigned to each intervention option?) and to investigate the proportion of responders."
+    },
+    {
+      "metadata": {
+        "trusted": true
+      },
+      "cell_type": "code",
+      "source": "table(adhd$a1)",
+      "execution_count": 16,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": "\n-1  1 \n75 75 "
+          },
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "trusted": true
+      },
+      "cell_type": "code",
+      "source": "table(adhd$r)",
+      "execution_count": 17,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": "\n 0  1 \n99 51 "
+          },
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "trusted": true
+      },
+      "cell_type": "code",
+      "source": "table(adhd$a2, adhd$r, useNA = \"ifany\")",
+      "execution_count": 18,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": "      \n        0  1\n  -1   49  0\n  1    50  0\n  <NA>  0 51"
+          },
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "trusted": true
+      },
+      "cell_type": "code",
+      "source": "adhd$o11c <- with(adhd, o11 - mean(o11))\nadhd$o12c <- with(adhd, o12 - mean(o12))\nadhd$o13c <- with(adhd, o13 - mean(o13))\nadhd$o14c <- with(adhd, o14 - mean(o14))\n## o21 is measured among non-responders only\nadhd$o22c <- with(adhd, o22 - mean(o22))\n\n## center baseline variables using mean among non-responders\nadhd$o11cnr <- adhd$o12cnr <- adhd$o13cnr <- adhd$o14cnr <- NA\nadhd$o21cnr <- adhd$o22cnr <- NA\nadhd$o11cnr[adhd$r == 0] <- with(subset(adhd, r == 0), o11 - mean(o11))\nadhd$o12cnr[adhd$r == 0] <- with(subset(adhd, r == 0), o12 - mean(o12))\nadhd$o13cnr[adhd$r == 0] <- with(subset(adhd, r == 0), o13 - mean(o13))\nadhd$o14cnr[adhd$r == 0] <- with(subset(adhd, r == 0), o14 - mean(o14))\nadhd$o21cnr[adhd$r == 0] <- with(subset(adhd, r == 0), o21 - mean(o21))\nadhd$o22cnr[adhd$r == 0] <- with(subset(adhd, r == 0), o22 - mean(o22))",
+      "execution_count": 19,
+      "outputs": []
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "## <a name=\"part-a\"></a> Part (a): Main Effect of First-Stage Intervention Options\n\nLet's perform a regression analysis to compare first-line treatments on the end of study outcome: school performance (`Y`). \n\nTo start, we'll load the package `geepack`, which contains the function `geeglm`. We'll use `geeglm` for the regression. This is analogous to `PROC GENMOD` in SAS."
+    },
+    {
+      "metadata": {
+        "trusted": true
+      },
+      "cell_type": "code",
+      "source": "library(geepack)",
+      "execution_count": 20,
+      "outputs": []
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "Now we fit the model. Model syntax in R works like this: \n\n`DependentVariable ~ covariate + covariate + ... + covariate`\n\nWe also need to specify an `id` variable (`geeglm` is built for repeated-measures analysis) and the `data` set we're working with. We pass these arguments to `geeglm` by using `argument = value` syntax.\n\nLet's see what the code looks like:"
+    },
+    {
+      "metadata": {
+        "trusted": true
+      },
+      "cell_type": "code",
+      "source": "model1 <- geeglm(y ~ a1 + o11c + o12c + o13c + o14c,\n                 id = id, data = adhd)",
+      "execution_count": 21,
+      "outputs": []
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "In `model1`, we've fit the regression\n\n$$ E[Y\\mid A_1, \\mathbf{O}_1] = b_0 + b_1 A_1 + b_2 O_{11c} + b_3 O_{12c} + b_4 O_{13c} + b_5 O_{14c}.$$"
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "`functions.R`, which we imported earlier, contains a function called `estimate` which we can use to mimic the estimate statements in `PROC GENMOD`. It takes two arguments: the first is the model we fit above, and the second is a matrix which specifies \"contrasts\" of interest. This is analogous to the `PROC GENMOD` syntax *except* the arguments are not identified, and are instead \"positional\". The first element is the intercept, the second is $A_1$, etc."
+    },
+    {
+      "metadata": {
+        "trusted": true
+      },
+      "cell_type": "code",
+      "source": "estimate(model1,\n         rbind(\"Mean Y under BMOD\"   = c(1,  1, 0, 0, 0, 0),\n               \"Mean Y under MED\"    = c(1, -1, 0, 0, 0, 0),\n               \"Between groups diff\" = c(0,  2, 0, 0, 0, 0)))",
+      "execution_count": 22,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": "                    Estimate 95% LCL 95% UCL     SE p-value\nMean Y under BMOD     3.0459  2.7859  3.3059 0.1326  <1e-04\nMean Y under MED      2.8608  2.6008  3.1208 0.1326  <1e-04\nBetween groups diff   0.1851 -0.1849  0.5551 0.1888  0.3269"
+          },
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "Let's talk about where the Estimate and p-value columns in the above output are coming from. *Remember that the above results are using simulated data and do not necessarily reflect actual results of the ADHD SMART study.*\n\nBecause we've centered the baseline covariates $O_{1.c}$, we can estimate the mean school performance $Y$ under BMOD and at mean levels of all baseline covariates with $\\hat{b}_0 + \\hat{b}_1$, and under MED at mean levels of all baseline covariates with $\\hat{b}_0 - \\hat{b}_1$. Our estimate of the mean between-groups difference is thus $(\\hat{b}_0 + \\hat{b}_1)-(\\hat{b}_0 - \\hat{b}_1) = 2\\hat{b}_1$. We estimate, then, that mean school performance among children whose sequences of treatment began with BMOD is slightly higher than mean school performance of children who started on MED; however, this difference is not statistically significant (see below).\n\nThe p-value column corresponds to the test of the null hypothesis $H_0: \\mathbf{c}^\\top \\mathbf{b} = 0$ against the alternative $H_1: \\mathbf{c}^\\top \\mathbf{b} \\neq 0$, where $\\mathbf{c}$ is the \"contrast vector\" that corresponding to the appropirate combination of $b$'s (see the corresponding row in the use of `estimate` above). For example, the p-value of 0.3269 in the last row of the table corresponds to the test $H_0: 2b_1=0$ against the alternative $H_1 \\neq 0$. At the 5% significance level, we fail to reject $H_0$: there is insufficient evidence to suggest that there is a difference in mean school performance between children whose sequence of treatments began with MED and those whose sequences began with BMOD.\n"
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "### Side Analysis: Effect of Stage 1 Options on Non-Response Rate\n\nWe can use data from a SMART to examine the impact of the first-stage treatments on non-response rate: perhaps one intervention option yields more responders than others. This analysis is *not particularly useful* in the context of developing an adaptive intervention because short-term response does not incorporate the effects of future treatment decisions.  Nonetheless, is still interesting in its own right, and we analyze it here for completeness.\n\nFor simplicity, we use a simple frequency table with a chi-squared test (of indpedendence) to compare the proportions responding to each initial treatment. In practice, we can also use logistic regression to adjust for baseline covariates (which is likely preferable). \n\nFirst, we'll construct a 2x2 table of `a1` and `r`. Here, we use the function `with()` to avoid some typing. `with()` lets you \"attach\" a `data.frame` \"locally\", meaning you don't have to type `adhd$` in front of every variable name. `with()` takes two arguments: the first is a `data.frame` you want to locally attach; the second is the code you want to run with that `data.frame` attached. Let's check it out:"
+    },
+    {
+      "metadata": {
+        "trusted": true
+      },
+      "cell_type": "code",
+      "source": "with(adhd, table(a1, r))",
+      "execution_count": 23,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": "    r\na1    0  1\n  -1 47 28\n  1  52 23"
+          },
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "We've now cross-tabulated `a1` and `r`. We can see that 28 children who received MED in the first stage responded; 23 children who received BMOD responded. We can now perform a chi-squared test of independence to see if there is a statistically-significant difference in response rates. *(Note: the `correct = F` argument turns off the so-called Yates continuity correction for the chi-squared test in order to match the output of SAS)*"
+    },
+    {
+      "metadata": {
+        "trusted": true
+      },
+      "cell_type": "code",
+      "source": "with(adhd, chisq.test(table(a1, r), correct = F))",
+      "execution_count": 24,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": "\n\tPearson's Chi-squared test\n\ndata:  table(a1, r)\nX-squared = 0.74272, df = 1, p-value = 0.3888\n"
+          },
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "In terms of early response rate, initial MED is slighly better (vs. BMOD) by 7%, but there is not a statistically significant difference in response rates between the first stage options ($p$=0.39). "
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "## <a name=\"part-b\"></a>Part (b): Main effect of second-stage options / tactics\n\nLet's now investigate the second common aim of a SMART: comparing the effects of second-stage intervention options among non-responders. Here, we use the term *tactics* to describe these options, as we are comparing *INTENSIFY*ing the original treatment versus *AUGMENT*ing it with the other option. While the *INTENSIFY* intervention is different depending on the first-stage intervention (intensified *BMOD* is not the same as intensified *MED*), the strategy is the same: we're intensifying the original intervention.\n\nAs before, we'll fit a model for the main effect of the second stage treatment (`a2`), adjusted for covariates. This time, the covariates we adjust for are centered at the mean *among non-responders*, as these individuals are the only ones contributing to our analysis. We're also allowed to adjust for covariates collected in the second stage ($O_{2.}$), since they came *before* both our treatment indicator `a2` and our outcome `y`."
+    },
+    {
+      "metadata": {
+        "trusted": true
+      },
+      "cell_type": "code",
+      "source": "library(geepack)\nmodel2 <- geeglm(y ~ a2 + o11cnr + o12cnr + o13cnr + o14cnr + o21cnr + o22cnr,\n                 id = id,\n                 data = adhd, \n                 # Only use non-responders\n                 subset = r == 0)\n\nestimate(model2,\n         rbind(\"Mean Y w/INTENSIFY tactic\"   = c(1,  1, rep(0, 6)),\n               \"Mean Y w/AUGMENT tactic\"     = c(1, -1, rep(0, 6)),\n               \"Between groups difference\"   = c(0,  2, rep(0, 6))))",
+      "execution_count": 32,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": "                          Estimate 95% LCL 95% UCL     SE p-value\nMean Y w/INTENSIFY tactic   2.6181  2.3181  2.9182 0.1531  <1e-04\nMean Y w/AUGMENT tactic     3.2060  2.9028  3.5092 0.1547  <1e-04\nBetween groups difference  -0.5879 -1.0206 -0.1552 0.2208  0.0077"
+          },
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "These results provide estimates for the mean outcome had everyone in the study treated according to each of these second-stage tactics. The difference in means (INTENSIFY - AUGMENT) is estimated to be **-0.5879** units, and the p-value for the test of the null hypothesis that this difference is zero is 0.0077. Thus, we have sufficient evidence to suggest that AUGMENT is a statistically-significantly better second-stage intervention tactic than INTENSIFY."
+    },
+    {
+      "metadata": {
+        "trusted": true
+      },
+      "cell_type": "markdown",
+      "source": "## <a name=\"part-c\"></a>Part (c): Estimating the mean outcome under an embedded adaptive intervention\nA common primary aim in a SMART is to compare the mean outcomes under two embedded adaptive interventions which recommend different first-stage intervention options. Before we can make that comparison, it's useful to explore how to estimate the mean outcome under *one* embedded adaptive intervention.\n\nIn the ADHD study, there are **four** embedded adaptive interventions:\n1. MED  (A1 = -1) then AUGMENT   (A2 = -1) if non-response\n2. BMOD (A1 = 1)  then AUGMENT   (A2 = -1) if non-response\n3. MED  (A1 = -1) then INTENSIFY (A2 = 1)  if non-response\n4. BMOD (A1 = 1)  then INTENSIFY (A2 = 1)  if non-response"
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "### Estimate the mean outcome under (MED, AUGMENT)\nWe'll focus on AI 1 (MED, AUGMENT) for now. The process is analogous for the other embedded AIs.\n\nFirst, we'll create an indicator variable for whether or not an individual is consistent with (MED, AUGMENT). Call it `z1`. We define it as follows:\n$$ Z_1 = \\left\\{\n\\begin{array}{rl}\n    1 & \\text{consistent with (MED, AUGMENT)} \\\\\n    -1 & \\text{otherwise}\n\\end{array}\\right.. $$"
+    },
+    {
+      "metadata": {
+        "trusted": true
+      },
+      "cell_type": "code",
+      "source": "# Everyone starts with z1 = -1 (MED); add 2 if a1 = 1 and a2 is either NA (if responder) or -1 (AUGMENT; if non-responder)\nadhd$z1 <- -1 + 2 * with(adhd, a1 == -1 & a2 %in% c(NA, -1))",
+      "execution_count": 25,
+      "outputs": []
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "In order to account for imbalance (by design) in the numbers of responders and non-responders, we need to apply weights. Remember that the probability that a responder follows a given adaptive intervention is $1/2$, and the probability that a non-responder is consistent with an AI is $1/2 \\times 1/2 = 1/4$. So, we'll weight responders by 2 and non-responders by 4.\n\nWe'll create a new variable in the data called `w`:"
+    },
+    {
+      "metadata": {
+        "trusted": true
+      },
+      "cell_type": "code",
+      "source": "adhd$w <- with(adhd, 2 * r + 4 * (1-r))",
+      "execution_count": 26,
+      "outputs": []
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "We can now run a *weighted* regression. As above, we'll use `geeglm()`, this time specifying the `weights` argument in order to use the weights we've created. The model we'll use to estimate the mean outcome under AI 1 is\n$$\\mu(\\mathbf{b}) := E[Y\\mid Z_1] = b_0 + b_1 Z_1,$$\nwhere $Z_1$ is the indicator we created above. `geeglm()` finds $\\hat{\\mathbf{b}}$ by solving the following estimating equations:\n$$0 = E\\left[W(A_1, R, A_2)\\cdot D \\cdot \\left(Y - \\mu(\\mathbf{b})\\right)\\right].$$"
+    },
+    {
+      "metadata": {
+        "trusted": true
+      },
+      "cell_type": "code",
+      "source": "model3 <- geeglm(y ~ z1, weights = w, id = id, data = adhd)\nestimate(model3,\n         rbind(\"Mean Y under AI #1 (MED, AUGMENT)\" = c(1, 1)))",
+      "execution_count": 27,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": "                                  Estimate 95% LCL 95% UCL     SE p-value\nMean Y under AI #1 (MED, AUGMENT)   2.8649  2.5305  3.1992 0.1706 < 1e-04"
+          },
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "The estimated mean outcome had everyone in the SMART been treated consistent with (MED, AUGMENT) is 2.8649. The p-value is quite small, but remember this is for the test of $H_0: \\mathbf{c}^\\top \\mathbf{b} = 0$ vs. $H_1: \\mathbf{c}^\\top \\mathbf{b} \\neq 0$. Here, this is a test for whether the mean outcome is zero, which is generally uninteresting. Our focus is on the estimate and confidence interval, here."
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "### Estimate the mean outcome under (BMOD, AUGMENT)\nWe can repeat the above procedure for the (BMOD, AUGMENT) adaptive intervention. We create a new indicator, $Z_2$, for consistency with this AI, then once again perform a weighted regression."
+    },
+    {
+      "metadata": {
+        "trusted": true
+      },
+      "cell_type": "code",
+      "source": "# Everyone starts with z1 = 1 (BMOD); add 2 if a1 = 1 and a2 is either NA (if responder) or -1 (AUGMENT; if non-responder)\nadhd$z2 <- -1 + 2 * with(adhd, a1 ==  1 & a2 %in% c(NA, -1))\n\n# Run weighted regression\nmodel4 <- geeglm(y ~ z2, weights = w, id = id, data = adhd)\n\nestimate(model4,\n         rbind(\"Mean Y under AI#2 (BMOD, AUGMENT)\" = c(1, 1)))",
+      "execution_count": 30,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": "                                  Estimate 95% LCL 95% UCL     SE p-value\nMean Y under AI#2 (BMOD, AUGMENT)   3.5067  3.1643  3.8490 0.1747 < 1e-04"
+          },
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "trusted": true
+      },
+      "cell_type": "markdown",
+      "source": "## <a name=\"part-d\"></a>Part (d): Sample Size for Primary Aims involving Main Effect Comparisons\nThe regression models we fit above are standard tools in clinical trials and do not involve weighting. Therefore, sample size can be determined for primary aims involving main effect comparisons using standard sample size formulae. To see this, consider models 1 and 2 above without covariate adjustment. That is, consider the models\n$$ E[Y\\mid A_{1}] = \\beta_0 + \\beta_1 A_{1} $$\nand\n$$ E[Y\\mid A_{2}, S = 1] = \\gamma_0 + \\gamma_1 A_{2}. $$\n\nIn the context of the first model, the test $H_0: \\beta_1 = 0$ vs. $H_1: \\beta_1\\neq 0$, the test of whether there is a stage-1 main effect, can be addressed with a t-test. Similarly for the second model, $H_0: \\gamma_1 = 0$ vs. $H_1: \\gamma_1 \\neq 0$ is a t-test *among individuals who were re-randomized*. Therefore, we can use standard tools to compute sample size, e.g., http://statulator.com/SampleSize/ss2M.html or http://hedwig.mgh.harvard.edu/sample_size/js/js_parallel_quant.html, with slight modifications. \n\nWe can also use R to do this for us. Let's first focus on the stage-1 main effect. Assuming we want to detect an effect size $\\delta = 0.3$ with 85% power and a 5% significance level, the number of individuals required in each arm of the trial is 201, so the total sample size is 402."
+    },
+    {
+      "metadata": {
+        "trusted": true
+      },
+      "cell_type": "code",
+      "source": "power.t.test(delta = 0.3, power = 0.85, sig.level = 0.05, alternative = \"two.sided\")",
+      "execution_count": 1,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": "\n     Two-sample t test power calculation \n\n              n = 200.485\n          delta = 0.3\n             sd = 1\n      sig.level = 0.05\n          power = 0.85\n    alternative = two.sided\n\nNOTE: n is number in *each* group\n"
+          },
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "You can also compute this manually, if you're willing to use an asymptotic z-test. For large sample sizes, the results will be very similar; alternatively, you can make the assumption that your effect size is based on a known population standard deviation, and use the z-test. The formula is \n$$ n \\geq \\frac{4 (z_{1-\\alpha/2} + z_{1-\\beta})^2}{\\delta^2}. $$\nIn R, we can get \"quantiles\" of the normal distribution (e.g., $z_{1-\\beta}$) using the `qnorm()` function."
+    },
+    {
+      "metadata": {
+        "trusted": true
+      },
+      "cell_type": "code",
+      "source": "ceiling(4 * (qnorm(1-0.05/2) + qnorm(0.85))^2 / (0.3)^2)",
+      "execution_count": 4,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": "[1] 400",
+            "text/latex": "400",
+            "text/markdown": "400",
+            "text/html": "400"
+          },
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "metadata": {},
+      "cell_type": "markdown",
+      "source": "For the stage-2 main effect, we can use the above results, but we need to scale them appropriately, since the second-stage main effect only matters for non-responders in the ADHD design. So, to get the sample size for the full trial, we'll divide by the non-response rate:\n$$ n \\geq \\frac{1}{1-r} \\cdot \\frac{4 (z_{1-\\alpha/2} + z_{1-\\beta})^2}{\\delta^2} $$\nwhere $r$ is the probability of response to first-stage treatment (assumed constant across first-stage treatments). As above, we can use `power.t.test()` and divide by $1-r$. Assuming a 50% response rate, the sample size for the whole trial is"
+    },
+    {
+      "metadata": {
+        "trusted": true
+      },
+      "cell_type": "code",
+      "source": "ceiling(2 * power.t.test(delta = 0.3, power = 0.85, sig.level = 0.05)$n / (1-.5))",
+      "execution_count": 7,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": "[1] 802",
+            "text/latex": "802",
+            "text/markdown": "802",
+            "text/html": "802"
+          },
+          "metadata": {}
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "kernelspec": {
+      "name": "r",
+      "display_name": "R",
+      "language": "R"
+    },
+    "language_info": {
+      "mimetype": "text/x-r-source",
+      "name": "R",
+      "pygments_lexer": "r",
+      "version": "3.5.3",
+      "file_extension": ".r",
+      "codemirror_mode": "r"
+    }
+  },
+  "nbformat": 4,
+  "nbformat_minor": 4
+}
